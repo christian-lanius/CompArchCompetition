@@ -29,41 +29,40 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
 
 
   ////////// initialization //////////
-  
-  //double **tmpmat = (double**) malloc(sizeof(double*) * (num+2));
   int width = num+2;
-  double *tmpmat = (double *)malloc(sizeof(double) * width*width);
-  //for (int i=0; i<num+2; i++)  {
-  //  tmpmat[i] = (double*)malloc(sizeof(double) * (num+2));
-  //}
-  //for (int i=0; i<num+2; i++)  {
-  //  tmpmat[0][i] = 0.0f;
-  //  tmpmat[num+1][i] = 0.0f;
-  //}
-  for (int i=0; i<num+2; i++){
-    //printf("%d | %d | MAX: %d\n", i, (num+1)*width + i, (num+2)*(num+2));
-    tmpmat[0*width + i] = 0.0f;
-    tmpmat[(num+1)*width + i] = 0.0f;
+  double **tmpmat_2 = (double**) malloc(sizeof(double*) * (num+2));
+  for (int i=0; i<num+2; i++)  {
+    tmpmat_2[i] = (double*)malloc(sizeof(double) * (num+2));
   }
-
-
-
-  //for (int i=1; i<=num; i++)  {
-  //  tmpmat[i][0] = 0.0f;
-  //  for (int j=1; j<=num; j++) {
-  //    tmpmat[i][j] = gpu_mat[(i-1)*num + (j-1)];
-  //  }
-  //  tmpmat[i][num+1] = 0.0f;
-  //}
-  
+  for (int i=0; i<num+2; i++)  {
+    tmpmat_2[0][i] = 0.0f;
+    tmpmat_2[num+1][i] = 0.0f;
+  }
   
   for (int i=1; i<=num; i++)  {
-    //tmpmat[i][0] = 0.0f;
+    tmpmat_2[i][0] = 0.0f;
+    for (int j=1; j<=num; j++) {
+      tmpmat_2[i][j] = gpu_mat[(i-1)*num + (j-1)];
+    }
+    tmpmat_2[i][num+1] = 0.0f;
+  }
+  
+  
+  
+  
+  
+  double *tmpmat = (double *)malloc(sizeof(double) * width*width);
+  for (int i=1; i<=num; i++)  {
     tmpmat[i*width + 0] = 0.0f;
     for (int j=1; j<=num; j++) {
       tmpmat[i*width + j]  = gpu_mat[(i-1)*num + (j-1)];
     }
     tmpmat[i*width + num+1] = 0.0f;
+  }
+  for (int i=0; i<num+2; i++){
+    //printf("%d | %d | MAX: %d\n", i, (num+1)*width + i, (num+2)*(num+2));
+    tmpmat[0*width + i] = 0.0f;
+    tmpmat[(num+1)*width + i] = 0.0f;
   }
   
   
@@ -78,22 +77,21 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   for( int x=0; x<num; x++)
   for( int y=0; y<num; y++){
     double tmp_sum = 0.0f;
-    //printf("output: %d|%d\n", x,y);
+    double tmp_sum_2 = 0.0f;
     for (int ky=0; ky<3; ky++) 
         for (int kx=0; kx<3; kx++){
-            //printf("x: %d | y: %d\n", x+ kx, (y+ky));
             tmp_sum += gpu_convkernel[ ky*3 + kx] * tmpmat[(y+ky)*width + x+kx];
+            //tmp_sum_2 += gpu_convkernel[ ky*3 + kx] * tmpmat_2[y + ky][x + kx];
         }
-    //printf("%f\n",tmp_sum);
-    //printf("-----------------\n");
-    gpu_matDst[y*width + x] = tmp_sum;
+    //gpu_matDst[y*width + x] = tmp_sum;
+    gpu_matDst[ y*num + x ] = tmp_sum;
   }
-  
-  
-  
+
   //device_matmul<<<1024, 1024>>>(d_mat, d_kernel, d_res);
   //cudaMemcpy(gpu_matDst, d_res, sizeof(double) * width*width, cudaMemcpyDeviceToHost);
 
+  
+  
   ////////////////////////////////////
   /*
   for (int i=1; i<=num; i++) {
@@ -101,7 +99,7 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
       double tmpsum = 0.0f;
       for (int ky=0; ky<3; ky++) 
       for (int kx=0; kx<3; kx++)
-        tmpsum += gpu_convkernel[ ky*3 + kx] * tmpmat[i-1 + ky][j-1 + kx];
+        tmpsum += gpu_convkernel[ ky*3 + kx] * tmpmat_2[i-1 + ky][j-1 + kx];
         
       gpu_matDst[ (i-1)*num + j-1 ] = tmpsum;
     }
@@ -109,10 +107,11 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
  */
 
   // ------free------ // 
-  //for (int i=0; i<num+2; i++)  {
-  //  free(tmpmat[i]);
-  //}
+  for (int i=0; i<num+2; i++)  {
+    free(tmpmat_2[i]);
+  }
   free(tmpmat);
+  free(tmpmat_2);
   cudaFree(d_mat);
   cudaFree(d_kernel);
   cudaFree(d_res);
