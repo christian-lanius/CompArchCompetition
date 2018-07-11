@@ -38,6 +38,33 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
     tmpmat[i][num+1] = 0.0f;
   }
 
+  double *d_mat, *d_kernel, *d_res;
+  cudaMalloc((void **)&d_mat, sizeof(double) * (num+2)* (num+2));
+  cudaMalloc((void **)&d_kernel, sizeof(double) * 3);
+  cudaMalloc((void **)&d_res, sizeof(double) * (num+2)* (num+2));
+
+  int width = num+2;
+  for (int i=0; i<num+2; i++)  {
+    d_mat[0*width + i] = 0.0f;
+    d_mat[(num+1)*width + i] = 0.0f;
+  }
+
+  for (int i=1; i<=num; i++)  {
+    // tmpmat[i][0] = 0.0f;
+    d_mat[(i-1)*width + 0] = 0.0f;
+    for (int j=1; j<=num; j++) {
+      d_mat[(i-1)*width + j]  = gpu_mat[(i-1)*num + (j-1)];
+    }
+    d_mat[(i-1)*width + num+1] = 0.0f;
+  }
+  for (int i=0; i<num+2; i++)  {
+    tmpmat[i] = (double*)malloc(sizeof(double) * (num+2));
+  }
+  for (int i=0; i<num+2; i++)  {
+    tmpmat[0][i] = 0.0f;
+    tmpmat[num+1][i] = 0.0f;
+  }
+
   ////////////////////////////////////
 
   for (int i=1; i<=num; i++) {
