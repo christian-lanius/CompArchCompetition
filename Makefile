@@ -1,6 +1,6 @@
 ################################################################################
 #
-CUDA_PATH = /usr/local/cuda-7.0
+CUDA_PATH = /usr/local/cuda-8.0
 #CUDA_PATH = /usr/local/cuda
 #
 ################################################################################
@@ -13,8 +13,10 @@ AR       = ar
 #
 ################################################################################
 #
-CFLAGS   += -O3 -Wall
-CFLAGS   += -g
+#CFLAGS   += -O3 -Wall
+#CFLAGS   += -g
+CFLAGS   += -v
+CFLAGS   += -Q
 LDFLAGS  += -L -lm
 LDFLAGS  += -L${CUDA_PATH}/lib64 -lcudart -lcudadevrt
 INCFLAGS  += -I${CUDA_PATH}/include
