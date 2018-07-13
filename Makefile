@@ -13,10 +13,10 @@ AR       = ar
 #
 ################################################################################
 #
-#CFLAGS   += -O3 -Wall
-#CFLAGS   += -g
-CFLAGS   += -v
-CFLAGS   += -Q
+CFLAGS   += -O3 -Wall
+CFLAGS   += -g
+#CFLAGS   += -v
+#CFLAGS   += -Q
 LDFLAGS  += -L -lm
 LDFLAGS  += -L${CUDA_PATH}/lib64 -lcudart -lcudadevrt
 INCFLAGS  += -I${CUDA_PATH}/include
