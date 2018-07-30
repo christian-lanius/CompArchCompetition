@@ -107,9 +107,9 @@ void print_time(wtime_t cpu_mult_time, wtime_t gpu_mult_time)
 
 void print_result(double mat_result)
 {
-  printf("Accumulated error is               %.16f\n", mat_result);
+  printf("Accumulated error is               %.9f\n", mat_result);
 
-  if(mat_result >= 10e-16)
+  if(mat_result >= 10e-9)
   	printf("\tincorrect...\n");
   else if (isnan(mat_result)) 
   	printf("\tincorrect...\n");
@@ -127,8 +127,6 @@ double check(double *cpu_resultMat, double *gpu_resultMat, int num)
     for (int j=0; j<num; j++) {
       double abs_diff = std::abs( gpu_resultMat[i*num + j] - cpu_resultMat[i*num + j]);
 
-      if (abs_diff > 10e-14) 
-       printf("i=%d, j:%d  sum: %f\n", i,j, sum);
 
       sum += abs_diff;
     }
@@ -138,16 +136,3 @@ double check(double *cpu_resultMat, double *gpu_resultMat, int num)
 }
 
 
-//  for(i = 0; i < num; i++){
-//	r += cpu_data[i] * gpu_data[i];
-//	px += cpu_data[i] * cpu_data[i];
-//	py += gpu_data[i] * gpu_data[i];
-//  }
-  
-//  px = sqrt(px);
-//  py = sqrt(py);
-//
-//  s = r / (px * py);
-//
-//  return s;
-//}
