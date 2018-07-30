@@ -15,11 +15,30 @@ __global__ void device_matmul( int num, double *gpu_in, double *gpu_kernel, doub
   x = threadIdx.x;
   y = blockIdx.x;
 
+  extern __shared__ double s[];
+  s[0*(num+2) + x] = gpu_in[(y + 0)*(num+2) + x];
+  s[1*(num+2) + x] = gpu_in[(y + 1)*(num+2) + x];
+  s[2*(num+2) + x] = gpu_in[(y + 2)*(num+2) + x];
+  
+  if(x >= num - 2){
+    //s[0*(num+2) + x+1] = gpu_in[(y + 0)*(num+2) + x+1]; 
+    //s[1*(num+2) + x+1] = gpu_in[(y + 1)*(num+2) + x+1]; 
+    //s[2*(num+2) + x+1] = gpu_in[(y + 2)*(num+2) + x+1];  
+    
+    s[0*(num+2) + x+2] = gpu_in[(y + 0)*(num+2) + x+2];
+    s[1*(num+2) + x+2] = gpu_in[(y + 1)*(num+2) + x+2];
+    s[2*(num+2) + x+2] = gpu_in[(y + 2)*(num+2) + x+2];
+    
+  }
+  __syncthreads();
+
   double tmpsum = 0.0f;
+  #pragma unroll
   for (int ky=0; ky<3; ky++){ 
-    for (int kx=0; kx<3; kx++){
-      int idx = 
-      tmpsum += gpu_kernel[ ky*3 + kx] * gpu_in[(y + ky)*(num+2) + (x + kx)];
+    #pragma unroll
+    for (int kx=0; kx<3; kx++){ 
+      //tmpsum += gpu_kernel[ ky*3 + kx] * gpu_in[(y + ky)*(num+2) + (x + kx)];
+      tmpsum += gpu_kernel[ ky*3 + kx] * s[ky*(num+2) + (x + kx)];
     }
   }
   //printf("(%d|%d)\n", x,y);
@@ -48,9 +67,10 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   cudaMalloc((void **) &gpu_in, sizeof(double) * (num+2) * (num+2));
   cudaMalloc((void **) &gpu_out, sizeof(double) * num * num);
   cudaMemset(gpu_in, 0, sizeof(double) * (num+2)* (num+2));
-/*
+  /*
   double **tmpmat = (double**) malloc(sizeof(double*) * (num+2));
   double *tmpArray = (double *) malloc(sizeof(double) * (num+2) * (num+2));
+  double *cpu_matDst = (double *) malloc(sizeof(double) * num * num);
   for (int i=0; i<num+2; i++)  {
     tmpmat[i] = &tmpArray[i*(num+2)];
   }
@@ -66,7 +86,7 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   }
   
   ////////////////////////////////////
-/*
+  /*
   for (int i=1; i<=num; i++) {
     for (int j=1; j<=num; j++) {
       double tmpsum = 0.0f;
@@ -74,12 +94,22 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
       for (int kx=0; kx<3; kx++)
         tmpsum += gpu_convkernel[ ky*3 + kx] * tmpmat[i-1 + ky][j-1 + kx];
         
-      gpu_matDst[ (i-1)*num + j-1 ] = tmpsum;
+      cpu_matDst[ (i-1)*num + j-1 ] = tmpsum;
     }
-  }
-  */
-  device_matmul<<<num,num>>>(num, gpu_in, gpu_kernel, gpu_out);
+  }*/
+  
+  device_matmul<<<num,num, 3*(num+2)*sizeof(double)>>>(num, gpu_in, gpu_kernel, gpu_out);
   cudaMemcpy(gpu_matDst, gpu_out, sizeof(double) * num * num, cudaMemcpyDeviceToHost);
+  /*
+  for (int x=0; x<num; x++) {
+    for (int y=0; y<num; y++) {
+      double eps = 10e-9;
+      if(abs(cpu_matDst[ y*num + x ] - gpu_matDst[ y*num + x ])> eps){
+        printf("(%d|%d): %f|%f\n",x,y,cpu_matDst[ y*num + x ],gpu_matDst[ y*num + x ]);
+        
+      }
+    }
+  }*/
   
   
   // ------free------ // 
