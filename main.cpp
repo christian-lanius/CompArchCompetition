@@ -79,11 +79,12 @@ int main(int argc, char **argv)
 
 
   create_timer();
-  gpu_function(num, gpu_mat, gpu_convkernel, gpu_matDst, gpu_mult_time);
-  printf("gpu calculation finished \n");
 
   cpu_function(num, cpu_mat, cpu_convkernel, cpu_matDst, cpu_mult_time);
-  printf("cpu calculation finished \n\n");
+  printf("cpu calculation finished \n");
+
+  gpu_function(num, gpu_mat, gpu_convkernel, gpu_matDst, gpu_mult_time);
+  printf("gpu calculation finished \n\n");
 
   mat_result = check(cpu_matDst, gpu_matDst, num);
 
