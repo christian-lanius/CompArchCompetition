@@ -23,19 +23,23 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   for (int i=0; i<num+2; i++)  {
     tmpmat[i] = (double*)malloc(sizeof(double) * (num+2));
   }
-  
+  memset(tmpmat[0], 0, sizeof(double) * (num+2));
+  memset(tmpmat[num+1], 0, sizeof(double) * (num+2));
+  /*
   for (int i=0; i<num+2; i++)  {
     tmpmat[0][i] = 0.0f;
     tmpmat[num+1][i] = 0.0f;
   }
-
+  */
 
 
   for (int i=1; i<=num; i++)  {
     tmpmat[i][0] = 0.0f;
+    memcpy( &(tmpmat[i][1]), &gpu_mat[(i-1)*num], sizeof(double)*num);
+    /*
     for (int j=1; j<=num; j++) {
       tmpmat[i][j] = gpu_mat[(i-1)*num + (j-1)];
-    }
+    }*/
     tmpmat[i][num+1] = 0.0f;
   }
 
