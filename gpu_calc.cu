@@ -9,35 +9,39 @@ __global__ void device_matmul( int num, double *gpu_in, double *gpu_kernel, doub
 {
   //This kernel calculates convolution GPU.
   //Please modify this kernel!!
-
   int x;
   int y;
   x = threadIdx.x;
-  y = blockIdx.x;
+  y = 2*blockIdx.x;
+
 
   extern __shared__ double s[];
   s[0*(num+2) + x] = gpu_in[(y + 0)*(num+2) + x];
   s[1*(num+2) + x] = gpu_in[(y + 1)*(num+2) + x];
   s[2*(num+2) + x] = gpu_in[(y + 2)*(num+2) + x];
+  s[3*(num+2) + x] = gpu_in[(y + 3)*(num+2) + x];
   
   if(x >= num - 2){
     s[0*(num+2) + x+2] = gpu_in[(y + 0)*(num+2) + x+2];
     s[1*(num+2) + x+2] = gpu_in[(y + 1)*(num+2) + x+2];
     s[2*(num+2) + x+2] = gpu_in[(y + 2)*(num+2) + x+2];
+    s[3*(num+2) + x+2] = gpu_in[(y + 3)*(num+2) + x+2];
     
   }
   __syncthreads();
-
-  double tmpsum = 0.0f;
-  #pragma unroll
-  for (int ky=0; ky<3; ky++){ 
+  
+  for(int offset=0;offset<2;offset++){
+    double tmpsum = 0.0f;
     #pragma unroll
-    for (int kx=0; kx<3; kx++){
-      tmpsum += gpu_kernel[ ky*3 + kx] * s[ky*(num+2) + (x + kx)];
+    for (int ky=0; ky<3; ky++){ 
+      #pragma unroll
+      for (int kx=0; kx<3; kx++){
+        tmpsum += gpu_kernel[ ky*3 + kx] * s[(ky+offset)*(num+2) + (x + kx)];
+      }
     }
+    //printf("(%d|%d)\n", x,y+offset);
+    gpu_out[ (y+offset)*num + x ] = tmpsum;
   }
-  //printf("(%d|%d)\n", x,y);
-  gpu_out[ y*num + x ] = tmpsum;
 
 }
 
@@ -47,7 +51,6 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   //This function launches the gpu-kernel (a kind of function).
   //Please modify this function for convolutional calculation.
   //You need to allocate the device memory and so on in this function.
-
 
   ////////// initialization //////////
 
@@ -67,8 +70,7 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   }
   
   ////////////////////////////////////
-  
-  device_matmul<<<num,num, 3*(num+2)*sizeof(double)>>>(num, gpu_in, gpu_kernel, gpu_out);
+  device_matmul<<<512,1024, 4*(num+2)*sizeof(double)>>>(num, gpu_in, gpu_kernel, gpu_out);
   cudaMemcpy(gpu_matDst, gpu_out, sizeof(double) * num * num, cudaMemcpyDeviceToHost);
   
   
