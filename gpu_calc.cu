@@ -5,8 +5,9 @@
 #include <unistd.h>
 #include <cuda_profiler_api.h>
 
-#define NUM_ROWS 4
-__global__ void device_matmul( int num, double *gpu_in, double *gpu_kernel, double *gpu_out)
+#define NUM_ROWS 2
+#define NUM_STREAMS 8
+__global__ void device_matmul( int num, int stream_offset, double *gpu_in, double *gpu_kernel, double *gpu_out)
 {
   //This kernel calculates convolution GPU.
   //Please modify this kernel!!
@@ -14,7 +15,7 @@ __global__ void device_matmul( int num, double *gpu_in, double *gpu_kernel, doub
   int x;
   int y;
   x = threadIdx.x;
-  y = NUM_ROWS*blockIdx.x;
+  y = NUM_ROWS*blockIdx.x+stream_offset*num/NUM_STREAMS;
 
 
   extern __shared__ double s[];
@@ -23,7 +24,6 @@ __global__ void device_matmul( int num, double *gpu_in, double *gpu_kernel, doub
   for(int offset=0; offset<(2+NUM_ROWS);offset++){
     s[offset*(num+2) + x] = gpu_in[(y + offset)*(num+2) + x];  
   }
-
   if(x >= num - 2){
     #pragma unroll
     for(int offset=0; offset<(2+NUM_ROWS);offset++){
@@ -60,11 +60,11 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   double *gpu_in;
   double *gpu_out;
   double *gpu_kernel;
+  double *out_pinned;
+  cudaMallocHost((void **) &out_pinned, sizeof(double) * num * num);
   cudaMalloc((void **) &gpu_in, sizeof(double) * (num+2) * (num+2));
   cudaMemset(gpu_in, 0, sizeof(double) * (num+2)* (num+2));
-  for (int i=1; i<=num; i++)  {
-    cudaMemcpyAsync(&gpu_in[i*(num+2)+1], &gpu_mat[(i-1)*num], sizeof(double)*(num), cudaMemcpyHostToDevice);
-  }
+  
   
   //Kernel initalization
   cudaMalloc((void **) &gpu_kernel, sizeof(double) * 3*3);
@@ -75,8 +75,23 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   
   
   ////////////////////////////////////
-  device_matmul<<<1024/NUM_ROWS,1024, (2+NUM_ROWS)*(num+2)*sizeof(double)>>>(num, gpu_in, gpu_kernel, gpu_out);
-  cudaMemcpy(gpu_matDst, gpu_out, sizeof(double) * num * num, cudaMemcpyDeviceToHost);
+  
+  for (int i=1; i<=num; i++)  {
+    cudaMemcpyAsync(&gpu_in[i*(num+2)+1], &gpu_mat[(i-1)*num], sizeof(double)*(num), cudaMemcpyHostToDevice);
+  }
+  cudaStream_t streams[NUM_STREAMS];
+  int stream_idx = 0;
+  for(stream_idx=0;stream_idx<NUM_STREAMS;stream_idx++){
+    cudaStreamCreate(&streams[stream_idx]);
+    int offset = stream_idx*num*num/NUM_STREAMS;
+    device_matmul<<<num/NUM_ROWS/NUM_STREAMS,num, (2+NUM_ROWS)*(num+2)*sizeof(double), streams[stream_idx]>>>(num, stream_idx, gpu_in, gpu_kernel, gpu_out);
+    cudaMemcpyAsync(&out_pinned[offset], &gpu_out[offset], sizeof(double) * num * num/NUM_STREAMS, cudaMemcpyDeviceToHost, streams[stream_idx]);
+  }
+
+  cudaDeviceSynchronize();
+  memcpy(gpu_matDst, out_pinned, sizeof(double)*num*num);
+  //gpu_matDst = out_pinned;
+  
   
   
   // ------free------ // 
@@ -85,7 +100,7 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   cudaFree(gpu_kernel);
   cudaFree(gpu_out);
   //free(tmpmat);
-  cudaProfilerStop();
+  //cudaProfilerStop();
   
 
 }
