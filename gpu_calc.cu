@@ -3,6 +3,7 @@
 #include <math.h>
 #include "calculation.h"
 #include <unistd.h>
+#include <cuda_profiler_api.h>
 
 
 __global__ void device_matmul( int num, double *gpu_in, double *gpu_kernel, double *gpu_out)
@@ -53,7 +54,7 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   //You need to allocate the device memory and so on in this function.
 
   ////////// initialization //////////
-
+  cudaProfilerStart();
   double *gpu_in;
   double *gpu_out;
   double *gpu_kernel;
@@ -65,14 +66,20 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   cudaMalloc((void **) &gpu_in, sizeof(double) * (num+2) * (num+2));
   cudaMalloc((void **) &gpu_out, sizeof(double) * num * num);
   cudaMemset(gpu_in, 0, sizeof(double) * (num+2)* (num+2));
+  //double *tmpmat;
+  //tmpmat = (double *) malloc(sizeof(double)*(num+2)*num);
   for (int i=1; i<=num; i++)  {
+    //tmpmat[(i-1)*(num+2) + 0] = 0.0f;
+    //tmpmat[(i-1)*(num+2) + num+1] = 0.0f;
+    //memcpy(&tmpmat[(i-1)*(num+2) + 1], &gpu_mat[(i-1)*num], sizeof(double)*(num));
     cudaMemcpyAsync(&gpu_in[i*(num+2)+1], &gpu_mat[(i-1)*num], sizeof(double)*(num), cudaMemcpyHostToDevice);
   }
+  //cudaMemcpy(&gpu_in[(num+2)], tmpmat, sizeof(double)*num*(num+2), cudaMemcpyHostToDevice);
   
   ////////////////////////////////////
   device_matmul<<<512,1024, 4*(num+2)*sizeof(double)>>>(num, gpu_in, gpu_kernel, gpu_out);
   cudaMemcpy(gpu_matDst, gpu_out, sizeof(double) * num * num, cudaMemcpyDeviceToHost);
-  
+  cudaProfilerStop();
   
   // ------free------ // 
   //free(tmpArray);
