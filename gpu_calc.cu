@@ -22,28 +22,19 @@ __global__ void device_matmul( int num, int stream_offset, double *gpu_in, doubl
 
   #pragma unroll
   for(int offset=0; offset<(2+NUM_ROWS);offset++){
-    s[offset*(num+2) + x] = gpu_in[(y + offset)*(num+2) + x];  
-  }
-  if(x >= num - 2){
-    #pragma unroll
-    for(int offset=0; offset<(2+NUM_ROWS);offset++){
-      s[offset*(num+2) + x+2] = gpu_in[(y + offset)*(num+2) + x+2];  
-    }
-    
+    s[offset*(num) + x] = gpu_in[(y + offset)*(num) + x];  
   }
   __syncthreads();
   
   for(int offset=0;offset<NUM_ROWS;offset++){
     double tmpsum = 0.0f;
     #pragma unroll
-    for (int ky=0; ky<3; ky++){ 
-      if( ky+y+offset != 0 && ky+y+offset != num+1){
+    for (int ky=0; ky<3; ky++){
         #pragma unroll
         for (int kx=0; kx<3; kx++){
           if( x+kx != 0 && x+kx != num+1)
-            tmpsum += gpu_kernel[ ky*3 + kx] * s[(ky+offset)*(num+2) + (x + kx)];
+            tmpsum += gpu_kernel[ ky*3 + kx] * s[(ky+offset)*(num) + (x + kx-1)];
         }
-      }
     }
     //printf("(%d|%d)\n", x,y+offset);
     gpu_out[ (y+offset)*num + x ] = tmpsum;
@@ -65,8 +56,8 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   double *gpu_kernel;
   //double *out_pinned;
   //cudaMallocHost((void **) &out_pinned, sizeof(double) * num * num);
-  cudaMalloc((void **) &gpu_in, sizeof(double) * (num+2) * (num+2));
-  cudaMemset(gpu_in, 0, sizeof(double) * (num+2)* (num+2));
+  cudaMalloc((void **) &gpu_in, sizeof(double) * (num+2) * (num));
+  cudaMemset(gpu_in, 0, sizeof(double) * (num+2)* (num));
   
   
   //Kernel initalization
@@ -82,25 +73,17 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   for(int stream_idx=0;stream_idx<NUM_STREAMS;stream_idx++){
     cudaStreamCreate(&streams[stream_idx]);
   }
-  int stream_idx = 0;
-  for (int i=1; i<=num; i++)  {
-    cudaMemcpyAsync(&gpu_in[i*(num+2)+1], &gpu_mat[(i-1)*num], sizeof(double)*(num), cudaMemcpyHostToDevice, streams[stream_idx]);
-    if( i >= (stream_idx+1)*num/NUM_STREAMS){
-      int offset = stream_idx*num*num/NUM_STREAMS;
-      cudaStreamSynchronize(streams[stream_idx]);
-      device_matmul<<<num/NUM_ROWS/NUM_STREAMS,num, (2+NUM_ROWS)*(num+2)*sizeof(double), streams[stream_idx]>>>(num, stream_idx, gpu_in, gpu_kernel, gpu_out);
-      cudaMemcpyAsync(&gpu_matDst[offset], &gpu_out[offset], sizeof(double) * num * num/NUM_STREAMS, cudaMemcpyDeviceToHost, streams[stream_idx]);
-      stream_idx++;
-    }
-    
-  }
 
-  // cudaDeviceSynchronize();
-  // for(int stream_idx=0;stream_idx<NUM_STREAMS;stream_idx++){
-  //   int offset = stream_idx*num*num/NUM_STREAMS;
-  //   device_matmul<<<num/NUM_ROWS/NUM_STREAMS,num, (2+NUM_ROWS)*(num+2)*sizeof(double), streams[stream_idx]>>>(num, stream_idx, gpu_in, gpu_kernel, gpu_out);
-  //   cudaMemcpyAsync(&gpu_matDst[offset], &gpu_out[offset], sizeof(double) * num * num/NUM_STREAMS, cudaMemcpyDeviceToHost, streams[stream_idx]);
-  // }
+  //printf("foo\n");
+  cudaMemcpy(&gpu_in[num], gpu_mat, sizeof(double)*num*num, cudaMemcpyHostToDevice);
+  
+
+  cudaDeviceSynchronize();
+  for(int stream_idx=0;stream_idx<NUM_STREAMS;stream_idx++){
+    int offset = stream_idx*num*num/NUM_STREAMS;
+    device_matmul<<<num/NUM_ROWS/NUM_STREAMS,num, (2+NUM_ROWS)*num*sizeof(double), streams[stream_idx]>>>(num, stream_idx, gpu_in, gpu_kernel, gpu_out);
+    cudaMemcpyAsync(&gpu_matDst[offset], &gpu_out[offset], sizeof(double) * num * num/NUM_STREAMS, cudaMemcpyDeviceToHost, streams[stream_idx]);
+  }
 
   cudaDeviceSynchronize();
   //memcpy(gpu_matDst, out_pinned, sizeof(double)*num*num);
