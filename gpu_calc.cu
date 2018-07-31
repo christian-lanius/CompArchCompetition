@@ -50,7 +50,7 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   //You need to allocate the device memory and so on in this function.
 
   ////////// initialization //////////
-  cudaProfilerStart();
+  //cudaProfilerStart();
   double *gpu_in;
   double *gpu_out;
   double *gpu_kernel;
@@ -73,14 +73,16 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   }
   
   
-
-  
+  //cudaMemcpy(&gpu_in[(num)], gpu_mat, sizeof(double)*num*num, cudaMemcpyHostToDevice);
+  //TODO: The copy to device does not work properly, race condition
   for(int stream_idx=0;stream_idx<NUM_STREAMS;stream_idx++){
-    int offset = stream_idx*num*num/NUM_STREAMS;
-    cudaMemcpyAsync(&gpu_in[num+offset], &gpu_mat[offset], sizeof(double)*num*num/NUM_STREAMS, cudaMemcpyHostToDevice, streams[stream_idx]);
-    cudaStreamSynchronize(streams[stream_idx]);
+    int offset = stream_idx*(num)*num/NUM_STREAMS;
+    cudaMemcpyAsync(&gpu_in[num+offset], &gpu_mat[offset], sizeof(double)*num*(num)/NUM_STREAMS, cudaMemcpyHostToDevice, streams[stream_idx]);
+    //cudaStreamSynchronize(streams[stream_idx]);
     device_matmul<<<num/NUM_ROWS/NUM_STREAMS,num, (2+NUM_ROWS)*num*sizeof(double), streams[stream_idx]>>>(num, stream_idx, gpu_in, gpu_kernel, gpu_out);
+    //cudaStreamSynchronize(streams[stream_idx]);
     cudaMemcpyAsync(&gpu_matDst[offset], &gpu_out[offset], sizeof(double) * num * num/NUM_STREAMS, cudaMemcpyDeviceToHost, streams[stream_idx]);
+    
   }
   
   
