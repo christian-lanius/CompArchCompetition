@@ -4,9 +4,10 @@
 #include "calculation.h"
 #include <unistd.h>
 #include <cuda_profiler_api.h>
+#include <vector_types.h>
 
 #define NUM_ROWS 2
-#define NUM_STREAMS 8
+#define NUM_STREAMS 4
 __global__ void device_matmul( int num, int stream_offset, double *gpu_in, double *gpu_kernel, double *gpu_out)
 {
   //This kernel calculates convolution GPU.
@@ -22,7 +23,7 @@ __global__ void device_matmul( int num, int stream_offset, double *gpu_in, doubl
 
   #pragma unroll
   for(int offset=0; offset<(2+NUM_ROWS);offset++){
-    s[offset*(num) + x] = gpu_in[(y + offset)*(num) + x];  
+    s[(2+NUM_ROWS)*x + offset] = gpu_in[y*num + (2+NUM_ROWS)*x + offset];  
   }
   __syncthreads();
   
