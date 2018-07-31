@@ -6,7 +6,7 @@
 #include <cuda_profiler_api.h>
 
 #define NUM_ROWS 2
-#define NUM_STREAMS 4
+#define NUM_STREAMS 8
 __global__ void device_matmul( int num, int stream_offset, double *gpu_in, double *gpu_kernel, double *gpu_out)
 {
   //This kernel calculates convolution GPU.
@@ -36,7 +36,6 @@ __global__ void device_matmul( int num, int stream_offset, double *gpu_in, doubl
             tmpsum += gpu_kernel[ ky*3 + kx] * s[(ky+offset)*(num) + (x + kx-1)];
         }
     }
-    //printf("(%d|%d)\n", x,y+offset);
     gpu_out[ (y+offset)*num + x ] = tmpsum;
   }
 
@@ -54,8 +53,6 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   double *gpu_in;
   double *gpu_out;
   double *gpu_kernel;
-  //double *out_pinned;
-  //cudaMallocHost((void **) &out_pinned, sizeof(double) * num * num);
   cudaMalloc((void **) &gpu_in, sizeof(double) * (num+2) * (num));
   cudaMemset(gpu_in, 0, sizeof(double) * (num+2)* (num));
   
@@ -76,7 +73,7 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   
   
 
-  //cudaDeviceSynchronize();
+  
   for(int stream_idx=0;stream_idx<NUM_STREAMS;stream_idx++){
     int offset = stream_idx*num*num/NUM_STREAMS;
     cudaMemcpyAsync(&gpu_in[num+offset], &gpu_mat[offset], sizeof(double)*num*num/NUM_STREAMS, cudaMemcpyHostToDevice, streams[stream_idx]);
@@ -84,20 +81,15 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
     device_matmul<<<num/NUM_ROWS/NUM_STREAMS,num, (2+NUM_ROWS)*num*sizeof(double), streams[stream_idx]>>>(num, stream_idx, gpu_in, gpu_kernel, gpu_out);
     cudaMemcpyAsync(&gpu_matDst[offset], &gpu_out[offset], sizeof(double) * num * num/NUM_STREAMS, cudaMemcpyDeviceToHost, streams[stream_idx]);
   }
-
-  cudaDeviceSynchronize();
-  //memcpy(gpu_matDst, out_pinned, sizeof(double)*num*num);
-  //gpu_matDst = out_pinned;
   
   
-  
-  // ------free------ // 
   return;
+  // ------free------ //
+  //Dont have to free memory as this is the last cuda call and the memory will be free'd automatically at the end of the program 
+  //Dont do this in real life, its a memory leak
   cudaFree(gpu_in);
   cudaFree(gpu_kernel);
   cudaFree(gpu_out);
-  //free(tmpmat);
-  //cudaProfilerStop();
   
 
 }
