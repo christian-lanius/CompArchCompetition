@@ -20,11 +20,8 @@ __global__ void device_matmul( int num, int stream_offset, double *gpu_in, doubl
 
 
   extern __shared__ double s[];
-
-  #pragma unroll
-  for(int offset=0; offset<(2+NUM_ROWS);offset++){
-    s[(2+NUM_ROWS)*x + offset] = gpu_in[y*num + (2+NUM_ROWS)*x + offset];  
-  }
+  reinterpret_cast<double4*>(s)[x] = reinterpret_cast<double4*>(gpu_in)[y*num/4 + x];  
+  
   __syncthreads();
   
   for(int offset=0;offset<NUM_ROWS;offset++){
