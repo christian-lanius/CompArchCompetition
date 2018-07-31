@@ -37,9 +37,12 @@ __global__ void device_matmul( int num, int stream_offset, double *gpu_in, doubl
     double tmpsum = 0.0f;
     #pragma unroll
     for (int ky=0; ky<3; ky++){ 
-      #pragma unroll
-      for (int kx=0; kx<3; kx++){
-        tmpsum += gpu_kernel[ ky*3 + kx] * s[(ky+offset)*(num+2) + (x + kx)];
+      if( ky+y+offset != 0 && ky+y+offset != num+1){
+        #pragma unroll
+        for (int kx=0; kx<3; kx++){
+          if( x+kx != 0 && x+kx != num+1)
+            tmpsum += gpu_kernel[ ky*3 + kx] * s[(ky+offset)*(num+2) + (x + kx)];
+        }
       }
     }
     //printf("(%d|%d)\n", x,y+offset);
