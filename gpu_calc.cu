@@ -7,7 +7,7 @@
 #include <vector_types.h>
 
 #define NUM_ROWS 2
-#define NUM_STREAMS 4
+#define NUM_STREAMS 8
 __global__ void device_matmul( int num, int stream_offset, double *gpu_in, double *gpu_kernel, double *gpu_out)
 {
   //This kernel calculates convolution GPU.
@@ -28,11 +28,14 @@ __global__ void device_matmul( int num, int stream_offset, double *gpu_in, doubl
     double tmpsum = 0.0f;
     #pragma unroll
     for (int ky=0; ky<3; ky++){
-        #pragma unroll
-        for (int kx=0; kx<3; kx++){
-          if( x+kx != 0 && x+kx != num+1)
-            tmpsum += gpu_kernel[ ky*3 + kx] * s[(ky+offset)*(num) + (x + kx-1)];
-        }
+      int in_y = (ky+offset)*(num);
+      int ker_y = ky*3;
+      #pragma unroll
+      for (int kx=0; kx<3; kx++){
+        int in_x = x+kx;
+        if( in_x != 0 && in_x != num+1)
+          tmpsum += gpu_kernel[ ker_y + kx] * s[in_y+ (in_x-1)];
+      }
     }
     gpu_out[ (y+offset)*num + x ] = tmpsum;
   }
