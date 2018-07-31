@@ -66,8 +66,10 @@ int main(int argc, char **argv)
 
   int num = 1024;
 
-  gpu_mat = (double*)malloc(sizeof(double) * num * num);
-  gpu_matDst = (double*)malloc(sizeof(double) * num * num);
+  //gpu_mat = (double*)malloc(sizeof(double) * num * num);
+  cudaMallocHost((void **) &gpu_mat, sizeof(double) * num * num);
+  //gpu_matDst = (double*)malloc(sizeof(double) * num * num);
+  cudaMallocHost((void **) &gpu_matDst, sizeof(double) * num * num);
   gpu_convkernel = (double*)malloc(sizeof(double) * 3*3);
   cpu_mat = (double*)malloc(sizeof(double) * num * num);
   cpu_matDst = (double*)malloc(sizeof(double) * num * num);
@@ -96,9 +98,9 @@ int main(int argc, char **argv)
   free(cpu_mat);
   free(cpu_convkernel);
   free(cpu_matDst);
-  free(gpu_mat);
+  cudaFree(gpu_mat);
   free(gpu_convkernel);
-  free(gpu_matDst);
+  cudaFree(gpu_matDst);
 
   return 0;
 }

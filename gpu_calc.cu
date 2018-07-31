@@ -6,7 +6,7 @@
 #include <cuda_profiler_api.h>
 
 #define NUM_ROWS 2
-#define NUM_STREAMS 8
+#define NUM_STREAMS 4
 __global__ void device_matmul( int num, int stream_offset, double *gpu_in, double *gpu_kernel, double *gpu_out)
 {
   //This kernel calculates convolution GPU.
@@ -60,8 +60,8 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   double *gpu_in;
   double *gpu_out;
   double *gpu_kernel;
-  double *out_pinned;
-  cudaMallocHost((void **) &out_pinned, sizeof(double) * num * num);
+  //double *out_pinned;
+  //cudaMallocHost((void **) &out_pinned, sizeof(double) * num * num);
   cudaMalloc((void **) &gpu_in, sizeof(double) * (num+2) * (num+2));
   cudaMemset(gpu_in, 0, sizeof(double) * (num+2)* (num+2));
   
@@ -75,21 +75,23 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   
   
   ////////////////////////////////////
-  
-  for (int i=1; i<=num; i++)  {
-    cudaMemcpyAsync(&gpu_in[i*(num+2)+1], &gpu_mat[(i-1)*num], sizeof(double)*(num), cudaMemcpyHostToDevice);
-  }
   cudaStream_t streams[NUM_STREAMS];
-  int stream_idx = 0;
-  for(stream_idx=0;stream_idx<NUM_STREAMS;stream_idx++){
+  for(int stream_idx=0;stream_idx<NUM_STREAMS;stream_idx++){
     cudaStreamCreate(&streams[stream_idx]);
+  }
+
+  for (int i=1; i<=num; i++)  {
+    cudaMemcpyAsync(&gpu_in[i*(num+2)+1], &gpu_mat[(i-1)*num], sizeof(double)*(num), cudaMemcpyHostToDevice, streams[i%NUM_STREAMS]);
+  }
+  
+  for(int stream_idx=0;stream_idx<NUM_STREAMS;stream_idx++){
     int offset = stream_idx*num*num/NUM_STREAMS;
     device_matmul<<<num/NUM_ROWS/NUM_STREAMS,num, (2+NUM_ROWS)*(num+2)*sizeof(double), streams[stream_idx]>>>(num, stream_idx, gpu_in, gpu_kernel, gpu_out);
-    cudaMemcpyAsync(&out_pinned[offset], &gpu_out[offset], sizeof(double) * num * num/NUM_STREAMS, cudaMemcpyDeviceToHost, streams[stream_idx]);
+    cudaMemcpyAsync(&gpu_matDst[offset], &gpu_out[offset], sizeof(double) * num * num/NUM_STREAMS, cudaMemcpyDeviceToHost, streams[stream_idx]);
   }
 
   cudaDeviceSynchronize();
-  memcpy(gpu_matDst, out_pinned, sizeof(double)*num*num);
+  //memcpy(gpu_matDst, out_pinned, sizeof(double)*num*num);
   //gpu_matDst = out_pinned;
   
   
