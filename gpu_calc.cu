@@ -7,7 +7,10 @@
 #include <vector_types.h>
 
 #define NUM_ROWS 2
-#define NUM_STREAMS 4
+#define NUM_STREAMS 8
+
+#define SHARED_MEM_SIZE 48*1024 //48 kByte
+
 __global__ void device_matmul( int num, int stream_offset, double *gpu_in, double *gpu_kernel, double *gpu_out)
 {
   //This kernel calculates convolution GPU.
@@ -20,7 +23,7 @@ __global__ void device_matmul( int num, int stream_offset, double *gpu_in, doubl
 
 
   extern __shared__ double s[];
-  reinterpret_cast<double4*>(s)[x] = reinterpret_cast<double4*>(gpu_in)[y*num/4 + x];  
+  reinterpret_cast<double4*>(s)[x] = reinterpret_cast<double4*>(gpu_in)[y*num/4 + x];
   
   __syncthreads();
   
@@ -50,27 +53,30 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   //You need to allocate the device memory and so on in this function.
 
   ////////// initialization //////////
-  cudaProfilerStart();
+  //cudaProfilerStart();
+  //cudaHostRegister(gpu_matDst, sizeof(double)*num*num, cudaHostRegisterMapped);
+  //cudaHostRegister(gpu_mat, sizeof(double)*num*num, cudaHostRegisterMapped);
   double *gpu_in;
   double *gpu_out;
   double *gpu_kernel;
+  cudaStream_t streams[NUM_STREAMS];
+  for(int stream_idx=0;stream_idx<NUM_STREAMS;stream_idx++){
+    cudaStreamCreate(&streams[stream_idx]);
+  }
   cudaMalloc((void **) &gpu_in, sizeof(double) * (num+2) * (num));
   cudaMemset(gpu_in, 0, sizeof(double) * (num+2)* (num));
   
   
   //Kernel initalization
   cudaMalloc((void **) &gpu_kernel, sizeof(double) * 3*3);
-  cudaMemcpyAsync(gpu_kernel, gpu_convkernel, sizeof(double) * 3*3, cudaMemcpyHostToDevice);
+  cudaMemcpyAsync(gpu_kernel, gpu_convkernel, sizeof(double) * 3*3, cudaMemcpyHostToDevice, streams[1]);
   //Input and Output Initalization
   
   cudaMalloc((void **) &gpu_out, sizeof(double) * num * num);
   
   
   ////////////////////////////////////
-  cudaStream_t streams[NUM_STREAMS];
-  for(int stream_idx=0;stream_idx<NUM_STREAMS;stream_idx++){
-    cudaStreamCreate(&streams[stream_idx]);
-  }
+  
   
   
   for(int stream_idx=0;stream_idx<NUM_STREAMS;stream_idx++){
@@ -83,10 +89,7 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
     }else{ //copy one line before and one after as well as actual data
       cudaMemcpyAsync(&gpu_in[offset], &gpu_mat[offset-num], sizeof(double)*num*(num/NUM_STREAMS+2), cudaMemcpyHostToDevice, streams[stream_idx]);
     }
-    
-    //cudaStreamSynchronize(streams[stream_idx]);
-    device_matmul<<<num/NUM_ROWS/NUM_STREAMS,num, (2+NUM_ROWS)*num*sizeof(double), streams[stream_idx]>>>(num, stream_idx*num/NUM_STREAMS, gpu_in, gpu_kernel, gpu_out);
-    //cudaStreamSynchronize(streams[stream_idx]);
+    device_matmul<<<num/NUM_ROWS/NUM_STREAMS,num, SHARED_MEM_SIZE, streams[stream_idx]>>>(num, stream_idx*num/NUM_STREAMS, gpu_in, gpu_kernel, gpu_out);
     cudaMemcpyAsync(&gpu_matDst[offset], &gpu_out[offset], sizeof(double) * num * num/NUM_STREAMS, cudaMemcpyDeviceToHost, streams[stream_idx]);
     
   }
@@ -98,49 +101,6 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   cudaFree(gpu_in);
   cudaFree(gpu_kernel);
   cudaFree(gpu_out);
-////////////////////////////////////////////////////////////////////////////////////////////////
-  double *gpu_matDst_cpu = (double*)malloc(sizeof(double) * num * num);
-  double **tmpmat = (double**) malloc(sizeof(double*) * (num+2));
-  for (int i=0; i<num+2; i++)  {
-    tmpmat[i] = (double*)malloc(sizeof(double) * (num+2));
-  }
-  for (int i=0; i<num+2; i++)  {
-    tmpmat[0][i] = 0.0f;
-    tmpmat[num+1][i] = 0.0f;
-  }
-
-
-
-  for (int i=1; i<=num; i++)  {
-    tmpmat[i][0] = 0.0f;
-    for (int j=1; j<=num; j++) {
-      tmpmat[i][j] = gpu_mat[(i-1)*num + (j-1)];
-    }
-    tmpmat[i][num+1] = 0.0f;
-  }
-
-  ////////////////////////////////////
-
-  for (int i=1; i<=num; i++) {
-    for (int j=1; j<=num; j++) {
-      double tmpsum = 0.0f;
-      for (int ky=0; ky<3; ky++) 
-      for (int kx=0; kx<3; kx++)
-        tmpsum += gpu_convkernel[ ky*3 + kx] * tmpmat[i-1 + ky][j-1 + kx];
-        
-      gpu_matDst_cpu[ (i-1)*num + j-1 ] = tmpsum;
-    }
-  }
-//////////////////////////////////////////////////////////////////////////////////////////
-
-  for (int i=256; i<512; i++) {
-    for (int j=0; j<num; j++) {
-      double eps = 10e-9;
-      if(abs(gpu_matDst_cpu[i*num+j]-gpu_matDst[i*num+j])>eps){
-        printf("Error at (%d|%d): %f\n",j,i, gpu_matDst[i*num+j]);
-      }
-    }
-  }
 
 
   
