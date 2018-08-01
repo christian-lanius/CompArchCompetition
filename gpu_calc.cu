@@ -6,7 +6,7 @@
 #include <cuda_profiler_api.h>
 #include <vector_types.h>
 
-#define NUM_ROWS 2
+#define NUM_ROWS 2 //DONT CHANGE
 #define NUM_STREAMS 8
 
 #define SHARED_MEM_SIZE 48*1024 //48 kByte
@@ -75,10 +75,9 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   cudaMalloc((void **) &gpu_in, sizeof(double) * (num+2) * (num));
   cudaMemset(gpu_in, 0, sizeof(double) * (num+2)* (num));
   
-  
   //Kernel initalization
   cudaMalloc((void **) &gpu_kernel, sizeof(double) * 3*3);
-  cudaMemcpyAsync(gpu_kernel, gpu_convkernel, sizeof(double) * 3*3, cudaMemcpyHostToDevice, streams[1]);
+  cudaMemcpyAsync(gpu_kernel, gpu_convkernel, sizeof(double) * 3*3, cudaMemcpyHostToDevice, streams[0]);
   //Input and Output Initalization
   
   cudaMalloc((void **) &gpu_out, sizeof(double) * num * num);
@@ -86,10 +85,14 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
   
   ////////////////////////////////////
   
-  
+  if(NUM_STREAMS == 1){
+    cudaMemcpy(&gpu_in[num], gpu_mat, sizeof(double)*num*(num), cudaMemcpyHostToDevice);
+    device_matmul<<<num/NUM_ROWS/NUM_STREAMS,num, sizeof(double)*((2+NUM_ROWS)*num+9)>>>(num, 0, gpu_in, gpu_kernel, gpu_out);
+    cudaMemcpy(gpu_matDst, gpu_out, sizeof(double) * num * num/NUM_STREAMS, cudaMemcpyDeviceToHost);  
+    return;
+  }
   
   for(int stream_idx=0;stream_idx<NUM_STREAMS;stream_idx++){
-    //if(stream_idx != 1) continue;
     int offset = stream_idx*(num)*num/NUM_STREAMS;
     if(stream_idx == 0){//First line copy is offset by 1 (because of zero padding), thus copy one line less
       cudaMemcpyAsync(&gpu_in[num+offset], &gpu_mat[offset], sizeof(double)*num*(num/NUM_STREAMS+1), cudaMemcpyHostToDevice, streams[stream_idx]);

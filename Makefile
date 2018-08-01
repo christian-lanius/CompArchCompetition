@@ -21,9 +21,10 @@ LDFLAGS  += -L -lm
 LDFLAGS  += -L${CUDA_PATH}/lib64 -lcudart -lcudadevrt
 INCFLAGS  += -I${CUDA_PATH}/include
 NFLAGS   += -arch sm_35
+NFLAGS   += -Xptxas
 NFLAGS   += -O3
 NFLAGS   += -dc
-# NFLAGS   += --ptxas-options=-v
+#NFLAGS   += -ptxas
 #
 ################################################################################
 #
