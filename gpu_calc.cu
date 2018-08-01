@@ -11,6 +11,7 @@
 
 #define SHARED_MEM_SIZE 48*1024 //48 kByte
 
+
 __global__ void device_matmul( int num, int stream_offset, double *gpu_in, double *gpu_kernel, double *gpu_out)
 {
   //This kernel calculates convolution GPU.
@@ -18,26 +19,34 @@ __global__ void device_matmul( int num, int stream_offset, double *gpu_in, doubl
 
   int x;
   int y;
+  
   x = threadIdx.x;
   y = NUM_ROWS*blockIdx.x+stream_offset;
 
 
   extern __shared__ double s[];
+  double *gpu_kernel_shared;
+  gpu_kernel_shared = &s[(2+NUM_ROWS)*num];
   reinterpret_cast<double4*>(s)[x] = reinterpret_cast<double4*>(gpu_in)[y*num/4 + x];
+
+  if(x<9){
+    gpu_kernel_shared[x] = gpu_kernel[x];
+  }
   
   __syncthreads();
   
-  for(int offset=0;offset<NUM_ROWS;offset++){
+  #pragma unroll
+  for(int offset=0;offset<NUM_ROWS;++offset){
     double tmpsum = 0.0f;
     #pragma unroll
-    for (int ky=0; ky<3; ky++){
+    for (int ky=0; ky<3; ++ky){
       int in_y = (ky+offset)*(num);
       int ker_y = ky*3;
       #pragma unroll
-      for (int kx=0; kx<3; kx++){
+      for (int kx=0; kx<3; ++kx){
         int in_x = x+kx;
         if( in_x != 0 && in_x != num+1)
-          tmpsum += gpu_kernel[ ker_y + kx] * s[in_y+ (in_x-1)];
+          tmpsum += gpu_kernel_shared[ ker_y + kx] * s[in_y+ (in_x-1)];
       }
     }
     gpu_out[ (y+offset)*num + x ] = tmpsum;
@@ -89,7 +98,7 @@ __host__ void launch_kernel(int num, double *gpu_mat, double *gpu_convkernel, do
     }else{ //copy one line before and one after as well as actual data
       cudaMemcpyAsync(&gpu_in[offset], &gpu_mat[offset-num], sizeof(double)*num*(num/NUM_STREAMS+2), cudaMemcpyHostToDevice, streams[stream_idx]);
     }
-    device_matmul<<<num/NUM_ROWS/NUM_STREAMS,num, SHARED_MEM_SIZE, streams[stream_idx]>>>(num, stream_idx*num/NUM_STREAMS, gpu_in, gpu_kernel, gpu_out);
+    device_matmul<<<num/NUM_ROWS/NUM_STREAMS,num, sizeof(double)*((3+NUM_ROWS)*num+9), streams[stream_idx]>>>(num, stream_idx*num/NUM_STREAMS, gpu_in, gpu_kernel, gpu_out);
     cudaMemcpyAsync(&gpu_matDst[offset], &gpu_out[offset], sizeof(double) * num * num/NUM_STREAMS, cudaMemcpyDeviceToHost, streams[stream_idx]);
     
   }
